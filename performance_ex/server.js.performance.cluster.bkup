@@ -1,0 +1,41 @@
+const express = require("express");
+const cluster = require("cluster"); // inbuild
+const os = require("os");
+
+const PORT = 8001;
+const app = express();
+
+app.get("/", (req, res) => {
+  // if clusters were not forked, both requests would run on same thread and would block one for a blocking service
+  // in case of forking twice, 2 processor would handle 2 threads
+  res.send(`Performance example ${process.pid}`);
+});
+
+app.get("/blocking", (req, res) => {
+  const startTime = Date.now();
+  const blockDuration = 9000;
+  while (Date.now() - startTime < blockDuration) {
+    // event loop blocked
+  }
+  res.send(`Unblocked now ${process.pid}`);
+});
+console.log("----------------------------");
+console.log("Running server.js"); // will be printed once for master and 2 for each of worker
+if (cluster.isMaster) {
+  // executed on app start
+  console.log("master has been started");
+  // we need to limit the number of forks to the available processor/cpu in the system
+  const NUM_WORKERS = os.cpus().length;
+  console.log("CPU Num", NUM_WORKERS); // 4 logical cores
+  for (let i = 0; i < NUM_WORKERS; i++) {
+    cluster.fork();
+  }
+  // any more forking would reuse existing 4 threads and requests would be served in round robin
+  // sequential execution in that case
+} else {
+  console.log("worker has been started");
+  // server is running on worker threads on same port
+  app.listen(PORT, () => {
+    console.log(`server listening on ${PORT}`);
+  });
+}
