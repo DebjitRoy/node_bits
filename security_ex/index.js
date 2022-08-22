@@ -4,6 +4,7 @@ const path = require("path");
 const express = require("express");
 const helmet = require("helmet");
 const passport = require("passport");
+const cookieSession = require("cookie-session");
 const { Strategy } = require("passport-google-oauth20");
 
 require("dotenv").config();
@@ -13,6 +14,8 @@ const PORT = 3000;
 const config = {
   CLIENT_ID: process.env.CLIENT_ID,
   CLIENT_SECRET: process.env.CLIENT_SECRET,
+  COOKIE_KEY_1: process.env.COOKIE_KEY_1,
+  COOKIE_KEY_2: process.env.COOKIE_KEY_2,
 };
 
 passport.use(
@@ -32,14 +35,37 @@ passport.use(
   )
 );
 
+// Save the session to the cookie. User is saved in the cookie and will be sent to the user/browser
+passport.serializeUser((user, done) => {
+  // here, no parsing or reading from db - just relaying user data
+  const { id, displayName } = user;
+  console.log("Serialize", id, displayName);
+  done(null, id);
+});
+
+// Reads user data of session from cookie. Adds data to express mw so we can read req.user
+passport.deserializeUser((obj, done) => {
+  done(null, obj);
+});
+
 const app = express();
 
 app.use(helmet());
+app.use(
+  cookieSession({
+    name: "session",
+    maxAge: 24 * 60 * 60 * 1000,
+    keys: [config.COOKIE_KEY_1, config.COOKIE_KEY_2], // server secret keys to sign browser cookie
+  })
+);
 app.use(passport.initialize());
+app.use(passport.session());
 
 // MW for Authentication with OAuth
 const checkLoggedIn = (req, res, next) => {
-  const isLoggedIn = true; //TODO
+  // session automatically adds req.user with oauth user information
+  console.log("user", req.user); // userId passed in the serializeUser
+  const isLoggedIn = req.user;
   if (!isLoggedIn) {
     res.status(401).json({
       error: "login required",
@@ -64,7 +90,7 @@ app.get(
   passport.authenticate("google", {
     failureRedirect: "/failure",
     successRedirect: "/",
-    session: false,
+    session: true,
   }),
   (req, res) => {
     console.log("Google callback succesful");
