@@ -40,12 +40,13 @@ passport.serializeUser((user, done) => {
   // here, no parsing or reading from db - just relaying user data
   const { id, displayName } = user;
   console.log("Serialize", id, displayName);
-  done(null, id);
+  done(null, id); // keep cookie size small
 });
 
 // Reads user data of session from cookie. Adds data to express mw so we can read req.user
-passport.deserializeUser((obj, done) => {
-  done(null, obj);
+passport.deserializeUser((userId, done) => {
+  // do a db lookup for permission, and other info for the user here
+  done(null, userId);
 });
 
 const app = express();
@@ -65,7 +66,7 @@ app.use(passport.session());
 const checkLoggedIn = (req, res, next) => {
   // session automatically adds req.user with oauth user information
   console.log("user", req.user); // userId passed in the serializeUser
-  const isLoggedIn = req.user;
+  const isLoggedIn = req.user && req.isAuthenticated(); // isAuthenticated is a passport function to verify
   if (!isLoggedIn) {
     res.status(401).json({
       error: "login required",
@@ -102,7 +103,10 @@ app.get("/secret", checkLoggedIn, (req, res) => {
   return res.send("Secret value 42");
 });
 // common logout
-app.get("/auth/logout", (req, res) => {});
+app.get("/auth/logout", (req, res) => {
+  req.logOut(); // passport function - clears req.user and terminates any logged in session
+  return res.redirect("/");
+});
 
 app.get("/failure", (req, res) => {
   return res.send("Failed to log in");
